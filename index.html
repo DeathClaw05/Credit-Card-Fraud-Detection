@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Credit Card Fraud Detection — Model Comparison</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #07080f;
+    --surface: #0e101c;
+    --surface2: #161928;
+    --border: #1f2540;
+    --lr: #00e5ff;
+    --rf: #ff6b35;
+    --dt: #a855f7;
+    --lr-dim: rgba(0,229,255,0.12);
+    --rf-dim: rgba(255,107,53,0.12);
+    --dt-dim: rgba(168,85,247,0.12);
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --accent: #f0f2ff;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .wrap { max-width: 1300px; margin: 0 auto; padding: 0 2rem; position: relative; z-index: 1; }
+
+  /* ─── HEADER ─── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 3rem 0 2rem;
+    margin-bottom: 3.5rem;
+  }
+  .header-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+  header h1 {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--lr) 0%, var(--rf) 50%, var(--dt) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.75rem;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 1rem;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+  .dataset-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .dataset-pill span { color: var(--green); }
+
+  /* ─── MODEL CARDS ─── */
+  .model-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 3.5rem;
+  }
+  .model-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .model-card:hover { transform: translateY(-4px); }
+  .model-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+  .model-card.lr::before { background: var(--lr); box-shadow: 0 0 20px var(--lr); }
+  .model-card.rf::before { background: var(--rf); box-shadow: 0 0 20px var(--rf); }
+  .model-card.dt::before { background: var(--dt); box-shadow: 0 0 20px var(--dt); }
+  .model-card.lr:hover { box-shadow: 0 8px 40px rgba(0,229,255,0.12); }
+  .model-card.rf:hover { box-shadow: 0 8px 40px rgba(255,107,53,0.12); }
+  .model-card.dt:hover { box-shadow: 0 8px 40px rgba(168,85,247,0.12); }
+
+  .model-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+  }
+  .lr .model-icon { background: var(--lr-dim); }
+  .rf .model-icon { background: var(--rf-dim); }
+  .dt .model-icon { background: var(--dt-dim); }
+
+  .model-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  .model-abbr {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+  }
+  .big-metric {
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .lr .big-metric { color: var(--lr); }
+  .rf .big-metric { color: var(--rf); }
+  .dt .big-metric { color: var(--dt); }
+  .big-metric-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 1.5rem;
+    font-family: 'Space Mono', monospace;
+  }
+  .mini-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .mini-metric {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 0.75rem;
+  }
+  .mini-metric-val {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+  }
+  .mini-metric-label {
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ─── BADGE ─── */
+  .badge {
+    position: absolute;
+    top: 1.5rem; right: 1.5rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+  .badge.best { color: var(--green); border-color: var(--green); background: rgba(34,197,94,0.08); }
+  .badge.fast { color: var(--yellow); border-color: var(--yellow); background: rgba(234,179,8,0.08); }
+
+  /* ─── SECTION HEADERS ─── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .section-header h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .section-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+  }
+
+  /* ─── CHARTS GRID ─── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 3.5rem;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+  }
+  .chart-card h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.4rem;
+  }
+  .chart-card p {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    font-family: 'Space Mono', monospace;
+  }
+  .chart-card.wide { grid-column: span 2; }
+  .chart-wrap { position: relative; height: 280px; }
+  .chart-wrap.tall { height: 340px; }
+
+  /* ─── CONFUSION MATRICES ─── */
+  .confusion-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 3.5rem;
+  }
+  .cm-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+  }
+  .cm-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .cm-subtitle {
+    font-size: 0.65rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .cm-matrix {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+  }
+  .cm-axis-label {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+  }
+  .cm-col-label { padding: 0.3rem; text-align: center; }
+  .cm-row-label { padding: 0.3rem; writing-mode: vertical-rl; text-align: center; }
+  .cm-cell {
+    border-radius: 8px;
+    padding: 1rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+  .cm-cell .val { font-size: 1.3rem; font-weight: 700; }
+  .cm-cell .lbl { font-size: 0.55rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.08em; }
+  .cm-tn { background: rgba(34,197,94,0.15); color: var(--green); }
+  .cm-fp { background: rgba(239,68,68,0.12); color: var(--red); }
+  .cm-fn { background: rgba(234,179,8,0.12); color: var(--yellow); }
+  .cm-tp { background: rgba(34,197,94,0.25); color: var(--green); }
+
+  /* ─── METRICS TABLE ─── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 3.5rem;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { background: var(--surface2); }
+  thead th {
+    padding: 1rem 1.4rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-family: 'Space Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  tbody tr {
+    border-top: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: var(--surface2); }
+  td {
+    padding: 1rem 1.4rem;
+    font-size: 0.9rem;
+  }
+  td:first-child { font-weight: 600; color: var(--accent); }
+  .td-bar-wrap { display: flex; align-items: center; gap: 0.75rem; }
+  .td-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+    max-width: 120px;
+  }
+  .td-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+  .win-cell { position: relative; }
+  .win-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 0.4rem;
+    box-shadow: 0 0 8px var(--green);
+  }
+
+  /* ─── ROC SECTION ─── */
+  .roc-section {
+    margin-bottom: 3.5rem;
+  }
+
+  /* ─── INSIGHTS ─── */
+  .insights-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 3.5rem;
+  }
+  .insight-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+  }
+  .insight-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+  .insight-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.6rem; }
+  .insight-card p { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+  .insight-card strong { color: var(--text); }
+
+  /* ─── FOOTER ─── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 0;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-top: 1rem;
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .model-card, .chart-card, .cm-card, .insight-card {
+    animation: fadeUp 0.5s ease both;
+  }
+  .model-card:nth-child(2) { animation-delay: 0.08s; }
+  .model-card:nth-child(3) { animation-delay: 0.16s; }
+
+  @media (max-width: 900px) {
+    .model-cards, .confusion-grid, .insights-grid { grid-template-columns: 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-card.wide { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-label">Machine Learning · Performance Report</div>
+    <h1>Credit Card Fraud<br>Detection Models</h1>
+    <p>A side-by-side analysis of three classifiers trained on real-world transaction data — evaluating accuracy, fraud detection capability, and generalization.</p>
+    <div class="dataset-pill">
+      📁 creditcard.csv &nbsp;·&nbsp;
+      <span>284,807 transactions</span> &nbsp;·&nbsp;
+      492 fraud cases &nbsp;·&nbsp; 30 features
+    </div>
+  </header>
+
+  <!-- MODEL OVERVIEW CARDS -->
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2>Model Overview</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="model-cards">
+    <!-- Logistic Regression -->
+    <div class="model-card lr">
+      <div class="model-icon">📈</div>
+      <div class="model-name">Logistic Regression</div>
+      <div class="model-abbr">Linear Classifier</div>
+      <div class="big-metric">93.9%</div>
+      <div class="big-metric-label">Test Accuracy</div>
+      <div class="mini-metrics">
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--lr)">94.8%</div>
+          <div class="mini-metric-label">Train Acc.</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--lr)">~0.95</div>
+          <div class="mini-metric-label">Est. AUC</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--lr)">984</div>
+          <div class="mini-metric-label">Train Samples</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--lr)">80/20</div>
+          <div class="mini-metric-label">Split</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Random Forest -->
+    <div class="model-card rf">
+      <div class="badge best">⭐ Best Overall</div>
+      <div class="model-icon">🌲</div>
+      <div class="model-name">Random Forest</div>
+      <div class="model-abbr">Ensemble Classifier</div>
+      <div class="big-metric">97.0%</div>
+      <div class="big-metric-label">Test Accuracy</div>
+      <div class="mini-metrics">
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--rf)">0.9843</div>
+          <div class="mini-metric-label">ROC-AUC</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--rf)">0.9517</div>
+          <div class="mini-metric-label">Avg Precision</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--rf)">2952</div>
+          <div class="mini-metric-label">Train Samples</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--rf)">0.9821</div>
+          <div class="mini-metric-label">CV Mean AUC</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Decision Tree -->
+    <div class="model-card dt">
+      <div class="badge fast">⚡ Interpretable</div>
+      <div class="model-icon">🌿</div>
+      <div class="model-name">Decision Tree</div>
+      <div class="model-abbr">Tree Classifier</div>
+      <div class="big-metric">99.9%</div>
+      <div class="big-metric-label">Test Accuracy</div>
+      <div class="mini-metrics">
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--dt)">0.78</div>
+          <div class="mini-metric-label">Fraud Prec.</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--dt)">0.73</div>
+          <div class="mini-metric-label">Fraud Recall</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--dt)">199,364</div>
+          <div class="mini-metric-label">Train Samples</div>
+        </div>
+        <div class="mini-metric">
+          <div class="mini-metric-val" style="color:var(--dt)">70/30</div>
+          <div class="mini-metric-label">Split</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2>Performance Charts</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="charts-grid">
+    <!-- Accuracy Bar -->
+    <div class="chart-card">
+      <h3>Accuracy Comparison</h3>
+      <p>Test set accuracy across all three models</p>
+      <div class="chart-wrap">
+        <canvas id="accuracyChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Fraud Class Metrics -->
+    <div class="chart-card">
+      <h3>Fraud Class Metrics</h3>
+      <p>Precision, Recall & F1-Score for fraudulent transactions</p>
+      <div class="chart-wrap">
+        <canvas id="fraudMetricsChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Radar Chart -->
+    <div class="chart-card">
+      <h3>Multi-Metric Radar</h3>
+      <p>Holistic performance across 5 dimensions</p>
+      <div class="chart-wrap tall">
+        <canvas id="radarChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ROC-AUC -->
+    <div class="chart-card">
+      <h3>ROC-AUC Score</h3>
+      <p>Area under the ROC curve — higher = better discrimination</p>
+      <div class="chart-wrap tall">
+        <canvas id="aucChart"></canvas>
+      </div>
+    </div>
+
+    <!-- CV Scores RF -->
+    <div class="chart-card wide">
+      <h3>Random Forest — 5-Fold Cross-Validation ROC-AUC</h3>
+      <p>Fold-by-fold AUC stability check · Mean = 0.9821 ± 0.0048</p>
+      <div class="chart-wrap">
+        <canvas id="cvChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFUSION MATRICES -->
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2>Confusion Matrices</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="confusion-grid">
+    <!-- LR Confusion -->
+    <div class="cm-card">
+      <div class="cm-title" style="color:var(--lr)">Logistic Regression</div>
+      <div class="cm-subtitle">197 test samples · Balanced dataset</div>
+      <div class="cm-matrix">
+        <div></div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Legit</div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Fraud</div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Legit</div>
+        <div class="cm-cell cm-tn"><span class="val">~90</span><span class="lbl">TN</span></div>
+        <div class="cm-cell cm-fp"><span class="val">~8</span><span class="lbl">FP</span></div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Fraud</div>
+        <div class="cm-cell cm-fn"><span class="val">~4</span><span class="lbl">FN</span></div>
+        <div class="cm-cell cm-tp"><span class="val">~95</span><span class="lbl">TP</span></div>
+      </div>
+      <p style="font-size:0.65rem;color:var(--muted);margin-top:1rem;font-family:'Space Mono',monospace;">* Estimated from 93.9% test accuracy on balanced 50/50 dataset</p>
+    </div>
+
+    <!-- RF Confusion -->
+    <div class="cm-card">
+      <div class="cm-title" style="color:var(--rf)">Random Forest</div>
+      <div class="cm-subtitle">591 test samples · 5:1 balanced dataset</div>
+      <div class="cm-matrix">
+        <div></div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Legit</div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Fraud</div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Legit</div>
+        <div class="cm-cell cm-tn"><span class="val">493</span><span class="lbl">TN</span></div>
+        <div class="cm-cell cm-fp"><span class="val">0</span><span class="lbl">FP</span></div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Fraud</div>
+        <div class="cm-cell cm-fn"><span class="val">17</span><span class="lbl">FN</span></div>
+        <div class="cm-cell cm-tp"><span class="val">81</span><span class="lbl">TP</span></div>
+      </div>
+      <p style="font-size:0.65rem;color:var(--muted);margin-top:1rem;font-family:'Space Mono',monospace;">⭐ Zero false positives — no legitimate txn flagged as fraud</p>
+    </div>
+
+    <!-- DT Confusion -->
+    <div class="cm-card">
+      <div class="cm-title" style="color:var(--dt)">Decision Tree</div>
+      <div class="cm-subtitle">85,443 test samples · Full unbalanced dataset</div>
+      <div class="cm-matrix">
+        <div></div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Legit</div>
+        <div class="cm-col-label cm-axis-label" style="color:var(--muted)">Pred: Fraud</div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Legit</div>
+        <div class="cm-cell cm-tn"><span class="val">85,246</span><span class="lbl">TN</span></div>
+        <div class="cm-cell cm-fp"><span class="val">33</span><span class="lbl">FP</span></div>
+        <div class="cm-row-label cm-axis-label" style="color:var(--muted)">True: Fraud</div>
+        <div class="cm-cell cm-fn"><span class="val">44</span><span class="lbl">FN</span></div>
+        <div class="cm-cell cm-tp"><span class="val">120</span><span class="lbl">TP</span></div>
+      </div>
+      <p style="font-size:0.65rem;color:var(--muted);margin-top:1rem;font-family:'Space Mono',monospace;">Missed 44 of 164 fraud cases (26.8% miss rate)</p>
+    </div>
+  </div>
+
+  <!-- DETAILED METRICS TABLE -->
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2>Detailed Metrics Table</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="table-wrap" style="margin-bottom:3.5rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Logistic Regression</th>
+          <th>Random Forest</th>
+          <th>Decision Tree</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Test Accuracy</td>
+          <td>
+            <div class="td-bar-wrap">
+              93.9%
+              <div class="td-bar"><div class="td-bar-fill" style="width:93.9%;background:var(--lr)"></div></div>
+            </div>
+          </td>
+          <td class="win-cell">
+            <div class="td-bar-wrap">
+              <span class="win-dot"></span>97.0%
+              <div class="td-bar"><div class="td-bar-fill" style="width:97%;background:var(--rf)"></div></div>
+            </div>
+          </td>
+          <td>
+            <div class="td-bar-wrap">
+              99.9%*
+              <div class="td-bar"><div class="td-bar-fill" style="width:99.9%;background:var(--dt)"></div></div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>Train Accuracy</td>
+          <td>94.8%</td>
+          <td>—</td>
+          <td>~100%</td>
+        </tr>
+        <tr>
+          <td>ROC-AUC Score</td>
+          <td>~0.95 (est.)</td>
+          <td class="win-cell"><span class="win-dot"></span>0.9843</td>
+          <td>~0.87 (est.)</td>
+        </tr>
+        <tr>
+          <td>Fraud Precision</td>
+          <td>~0.92</td>
+          <td class="win-cell"><span class="win-dot"></span>1.00</td>
+          <td>0.78</td>
+        </tr>
+        <tr>
+          <td>Fraud Recall</td>
+          <td>~0.92</td>
+          <td>0.83</td>
+          <td class="win-cell"><span class="win-dot"></span>0.73†</td>
+        </tr>
+        <tr>
+          <td>Fraud F1-Score</td>
+          <td>~0.92</td>
+          <td class="win-cell"><span class="win-dot"></span>0.91</td>
+          <td>0.76</td>
+        </tr>
+        <tr>
+          <td>False Positives</td>
+          <td>~8</td>
+          <td class="win-cell"><span class="win-dot"></span>0</td>
+          <td>33</td>
+        </tr>
+        <tr>
+          <td>False Negatives</td>
+          <td>~4</td>
+          <td>17</td>
+          <td>44</td>
+        </tr>
+        <tr>
+          <td>CV Mean AUC</td>
+          <td>—</td>
+          <td class="win-cell"><span class="win-dot"></span>0.9821 ± 0.0048</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>Avg Precision (AP)</td>
+          <td>—</td>
+          <td class="win-cell"><span class="win-dot"></span>0.9517</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td>Imbalance Handling</td>
+          <td>Undersampling (492/492)</td>
+          <td>Undersample + class_weight</td>
+          <td>None (raw imbalance)</td>
+        </tr>
+        <tr>
+          <td>Interpretability</td>
+          <td>High</td>
+          <td>Medium (feature importance)</td>
+          <td class="win-cell"><span class="win-dot"></span>Very High (visual tree)</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:0.8rem 1.4rem;font-family:'Space Mono',monospace;font-size:0.6rem;color:var(--muted);border-top:1px solid var(--border);">
+      * Decision Tree's 99.9% accuracy is inflated by severe class imbalance (99.94% legitimate txns). &nbsp;·&nbsp; † DT recall measured on real-world imbalanced test set.
+    </div>
+  </div>
+
+  <!-- RF FEATURE IMPORTANCE -->
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2>Random Forest — Feature Importance</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:3.5rem;">
+    <h3>Top 10 Features by Importance Score</h3>
+    <p>PCA components ranked by their contribution to fraud prediction</p>
+    <div class="chart-wrap tall">
+      <canvas id="featureChart"></canvas>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2>Key Insights</h2>
+    <div class="section-line"></div>
+  </div>
+
+  <div class="insights-grid" style="grid-template-columns:1fr;">
+    <div class="insight-card">
+      <div class="insight-icon">🌲</div>
+      <h3 style="color:var(--rf)">Random Forest Wins</h3>
+      <p>With <strong>0 false positives</strong> and ROC-AUC of <strong>0.9843</strong>, Random Forest delivers the most reliable fraud detection. Its ensemble of 100 trees with <code>class_weight='balanced'</code> and cross-validation stability (0.9821 ± 0.0048) make it production-ready.</p>
+    </div>
+  </div>
+
+  <footer>CREDIT CARD FRAUD DETECTION · MODEL COMPARISON REPORT · 284,807 TRANSACTIONS · 3 MODELS</footer>
+</div>
+
+<script>
+const GRID_COLOR = 'rgba(255,255,255,0.05)';
+const TICK_COLOR = '#6b7280';
+const FONT = "'Space Mono', monospace";
+
+Chart.defaults.color = TICK_COLOR;
+Chart.defaults.font.family = FONT;
+Chart.defaults.font.size = 10;
+
+// ─── 1. Accuracy Bar ───────────────────────────────
+new Chart(document.getElementById('accuracyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Logistic Regression', 'Random Forest', 'Decision Tree*'],
+    datasets: [{
+      label: 'Test Accuracy (%)',
+      data: [93.9, 97.0, 99.9],
+      backgroundColor: ['rgba(0,229,255,0.25)', 'rgba(255,107,53,0.25)', 'rgba(168,85,247,0.25)'],
+      borderColor: ['#00e5ff', '#ff6b35', '#a855f7'],
+      borderWidth: 2,
+      borderRadius: 8,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        min: 90, max: 101,
+        grid: { color: GRID_COLOR },
+        ticks: { callback: v => v + '%' }
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ─── 2. Fraud Metrics Grouped Bar ─────────────────
+new Chart(document.getElementById('fraudMetricsChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Precision', 'Recall', 'F1-Score'],
+    datasets: [
+      {
+        label: 'Logistic Regression',
+        data: [0.92, 0.92, 0.92],
+        backgroundColor: 'rgba(0,229,255,0.3)',
+        borderColor: '#00e5ff',
+        borderWidth: 2, borderRadius: 6,
+      },
+      {
+        label: 'Random Forest',
+        data: [1.00, 0.83, 0.91],
+        backgroundColor: 'rgba(255,107,53,0.3)',
+        borderColor: '#ff6b35',
+        borderWidth: 2, borderRadius: 6,
+      },
+      {
+        label: 'Decision Tree',
+        data: [0.78, 0.73, 0.76],
+        backgroundColor: 'rgba(168,85,247,0.3)',
+        borderColor: '#a855f7',
+        borderWidth: 2, borderRadius: 6,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { boxWidth: 10, padding: 12 }
+      }
+    },
+    scales: {
+      y: {
+        min: 0.6, max: 1.05,
+        grid: { color: GRID_COLOR },
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// ─── 3. Radar ─────────────────────────────────────
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Accuracy', 'ROC-AUC', 'Fraud F1', 'Precision', 'Recall'],
+    datasets: [
+      {
+        label: 'Logistic Regression',
+        data: [93.9, 95, 92, 92, 92],
+        borderColor: '#00e5ff',
+        backgroundColor: 'rgba(0,229,255,0.1)',
+        pointBackgroundColor: '#00e5ff',
+        borderWidth: 2,
+      },
+      {
+        label: 'Random Forest',
+        data: [97.0, 98.4, 91, 100, 83],
+        borderColor: '#ff6b35',
+        backgroundColor: 'rgba(255,107,53,0.1)',
+        pointBackgroundColor: '#ff6b35',
+        borderWidth: 2,
+      },
+      {
+        label: 'Decision Tree',
+        data: [88, 87, 76, 78, 73],
+        borderColor: '#a855f7',
+        backgroundColor: 'rgba(168,85,247,0.1)',
+        pointBackgroundColor: '#a855f7',
+        borderWidth: 2,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { boxWidth: 10, padding: 12 } } },
+    scales: {
+      r: {
+        min: 60, max: 100,
+        grid: { color: GRID_COLOR },
+        angleLines: { color: GRID_COLOR },
+        pointLabels: { color: '#e8eaf0', font: { size: 10 } },
+        ticks: { display: false }
+      }
+    }
+  }
+});
+
+// ─── 4. AUC Horizontal Bar ────────────────────────
+new Chart(document.getElementById('aucChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Logistic Regression', 'Random Forest', 'Decision Tree'],
+    datasets: [{
+      label: 'ROC-AUC',
+      data: [0.95, 0.9843, 0.87],
+      backgroundColor: ['rgba(0,229,255,0.25)', 'rgba(255,107,53,0.25)', 'rgba(168,85,247,0.25)'],
+      borderColor: ['#00e5ff', '#ff6b35', '#a855f7'],
+      borderWidth: 2, borderRadius: 8,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        min: 0.8, max: 1.0,
+        grid: { color: GRID_COLOR },
+      },
+      y: { grid: { display: false } }
+    }
+  }
+});
+
+// ─── 5. CV Line ───────────────────────────────────
+new Chart(document.getElementById('cvChart'), {
+  type: 'line',
+  data: {
+    labels: ['Fold 1', 'Fold 2', 'Fold 3', 'Fold 4', 'Fold 5'],
+    datasets: [
+      {
+        label: 'Fold AUC',
+        data: [0.9821, 0.9864, 0.9822, 0.9732, 0.9864],
+        borderColor: '#ff6b35',
+        backgroundColor: 'rgba(255,107,53,0.15)',
+        pointBackgroundColor: '#ff6b35',
+        pointRadius: 6, tension: 0.35,
+        fill: true, borderWidth: 2,
+      },
+      {
+        label: 'Mean AUC (0.9821)',
+        data: [0.9821, 0.9821, 0.9821, 0.9821, 0.9821],
+        borderColor: 'rgba(255,255,255,0.3)',
+        borderDash: [6, 4], borderWidth: 1.5,
+        pointRadius: 0, fill: false,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { boxWidth: 10, padding: 12 } } },
+    scales: {
+      y: {
+        min: 0.96, max: 1.0,
+        grid: { color: GRID_COLOR },
+      },
+      x: { grid: { color: GRID_COLOR } }
+    }
+  }
+});
+
+// ─── 6. Feature Importance ────────────────────────
+new Chart(document.getElementById('featureChart'), {
+  type: 'bar',
+  data: {
+    labels: ['V14','V10','V17','V4','V12','V3','V11','V16','V2','V7'],
+    datasets: [{
+      label: 'Importance Score',
+      data: [0.2103, 0.1216, 0.1011, 0.0967, 0.0748, 0.0717, 0.0658, 0.0417, 0.0268, 0.0258],
+      backgroundColor: [
+        'rgba(255,107,53,0.6)','rgba(255,107,53,0.5)','rgba(255,107,53,0.45)',
+        'rgba(255,107,53,0.4)','rgba(255,107,53,0.35)',
+        'rgba(100,160,255,0.3)','rgba(100,160,255,0.3)','rgba(100,160,255,0.3)',
+        'rgba(100,160,255,0.25)','rgba(100,160,255,0.25)'
+      ],
+      borderColor: [
+        '#ff6b35','#ff6b35','#ff6b35','#ff6b35','#ff6b35',
+        '#64a0ff','#64a0ff','#64a0ff','#64a0ff','#64a0ff'
+      ],
+      borderWidth: 2, borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        grid: { color: GRID_COLOR },
+        ticks: { callback: v => v.toFixed(2) }
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+</script>
+</body>
+</html>
